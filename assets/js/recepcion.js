@@ -1,4 +1,4 @@
-// recepcion.js — Av. Morazán (load JSONBin, scanner-friendly, Enter flow)
+// recepcion.js — Av. Morazán (scanner-friendly + carga JSONBin + Enter flow + limpiar guarda)
 document.addEventListener('DOMContentLoaded', async () => {
   const IVA = 0.13;
   const $ = (id) => document.getElementById(id);
@@ -13,12 +13,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnExcel = $('exportExcel');
   const btnClear = $('clearReception');
 
-  // Manual inputs
+  // ------- Alta manual -------
   const mCodigo = $('mCodigo');
   const mNombre = $('mNombre');
   const mCodInv = $('mCodInv');
   const mCantidad = $('mCantidad');
   const mTotalSin = $('mTotalSin');
+
   $('btnAddManual').addEventListener('click', () => {
     const codigo = (mCodigo.value || '').trim();
     const nombre = (mNombre.value || '').trim();
@@ -35,13 +36,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     mCodigo.focus();
   });
 
-  // Autocomplete / Scanner-friendly
+  // ------- Autocomplete y pistola lectora -------
   const searchInput = $('searchInput');
   const suggestions = $('suggestions');
   let currentFocus = -1;
 
-  // Preload catalog before any scan
-  await preloadCatalog();
+  await preloadCatalog(); // del app.js
 
   searchInput.addEventListener('input', () => {
     const q = (searchInput.value || '').replace(/\r|\n/g,'').trim().toLowerCase();
@@ -113,8 +113,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Add row
-  function addRow({ barcode, nombre, codInvent, cantidad=1, totalSin=0 }) {
+  // ------- Agregar fila (CANTIDAD inicia vacía) -------
+  function addRow({ barcode, nombre, codInvent, cantidad='', totalSin=0 }) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td></td>
@@ -138,6 +138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     [qty, totalSinInp].forEach(inp => inp.addEventListener('input', () => recalcRow(tr)));
 
+    // Enter-flow: Cantidad -> TotalSin -> Search
     qty.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); totalSinInp.focus(); } });
     totalSinInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); searchInput.focus(); } });
 
@@ -157,6 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function parseNum(v){ const n = parseFloat(v); return isNaN(n) ? 0 : n; }
   function fix2(n){ return Math.round(n*100)/100; }
 
+  // Unidad sin IVA = TotalSin / Cantidad ; Unidad con IVA = Unidad sin IVA * 1.13
   function recalcRow(tr) {
     const qtyVal = parseNum(tr.querySelector('.qty').value);
     const totalSinVal = parseNum(tr.querySelector('.totalSin').value);
@@ -196,10 +198,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnPDF.disabled = !has;
     btnPrint.disabled = !has;
     btnExcel.disabled = !has;
-    btnClear.disabled = !has;
+    btnClear.disabled = !has && !proveedorInput.value.trim();
   }
 
-  // Guardar
+  // ------- Guardar -------
   btnSave.addEventListener('click', () => {
     if (!proveedorInput.value.trim()) { Swal.fire('Proveedor requerido', 'Ingrese el nombre del proveedor.', 'info'); return; }
     if (body.rows.length === 0) { Swal.fire('Sin ítems', 'Agregue al menos un producto.', 'error'); return; }
@@ -217,7 +219,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         unit_con_iva: fix2(unitCon),
         unit_sin_iva: fix2(unitSin),
         total_sin_iva: fix2(totalSin),
-        total_con_iva: fix2(totalSin * (1 + 0.13))
+        total_con_iva: fix2(totalSin * (1 + IVA))
       };
     });
 
@@ -241,7 +243,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }).catch(e => Swal.fire('Error', String(e), 'error'));
   });
 
-  // Cargar estado previo desde JSONBin y renderizar
+  // ------- Cargar estado previo desde JSONBin -------
   try {
     const record = await loadReceptionFromJSONBin();
     if (record && record.items && Array.isArray(record.items)) {
@@ -259,9 +261,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   } catch (e) { console.error('Error al cargar estado previo:', e); }
 
-  // PDF / Print
+  // ------- PDF / Imprimir -------
   btnPDF.addEventListener('click', () => exportPDF(false));
   btnPrint.addEventListener('click', () => exportPDF(true));
+
   function exportPDF(openWindow=false){
     if(body.rows.length===0) return;
     const { jsPDF } = window.jspdf;
@@ -289,8 +292,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if(openWindow) doc.output('dataurlnewwindow'); else doc.save(name);
   }
 
-  
-  // Excel — columnas exactas: codigo (Cod. Inventario), unidad (6), cantidad, totalcosto (con IVA)
+  // ------- Excel: codigo (Cod. Inventario), unidad=6, cantidad, totalcosto = COSTO TOTAL SIN IVA -------
   btnExcel.addEventListener('click', () => {
     if(body.rows.length===0) return;
     const fecha = new Date().toISOString().split('T')[0];
@@ -298,9 +300,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     [...body.getElementsByTagName('tr')].forEach(tr => {
       const codInvent = String(tr.cells[3].innerText || '');
       const qty = parseNum(tr.querySelector('.qty').value);
-      const totalSin = parseNum(tr.querySelector('.totalSin').value);
-      const totalCosto = totalSin;
-      data.push([codInvent, 6, Number(qty), Number(fix2(totalCosto))]);
+      const totalSin = parseNum(tr.querySelector('.totalSin').value); // COSTO TOTAL SIN IVA
+      data.push([codInvent, 6, Number(qty), Number(fix2(totalSin))]);
     });
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(data);
@@ -313,13 +314,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   });
 
-  // Limpiar
-
+  // ------- Limpiar (borra, resetea y GUARDA estado vacío) -------
   btnClear.addEventListener('click', () => {
-    if (body.rows.length === 0) return;
-    Swal.fire({ title:'¿Vaciar recepción?', icon:'warning', showCancelButton:true, confirmButtonText:'Sí, limpiar' })
-      .then(res => { if(res.isConfirmed){ body.innerHTML=''; recalcTotals(); updateButtons(); }});
+    if (body.rows.length === 0 && !proveedorInput.value.trim()) return;
+    Swal.fire({
+      title:'¿Vaciar y comenzar nueva recepción?',
+      text:'Esto guardará el estado vacío.',
+      icon:'warning',
+      showCancelButton:true,
+      confirmButtonText:'Sí, limpiar y guardar'
+    }).then(res => {
+      if(res.isConfirmed){
+        body.innerHTML='';
+        proveedorInput.value='';
+        recalcTotals();
+        updateButtons();
+        const payload = {
+          meta: { tienda: 'AVENIDA MORAZÁN', proveedor: '', fechaRecepcion: new Date().toISOString() },
+          items: [],
+          totales: { lineas: 0, cantidad_total: 0, total_sin_iva: 0, total_con_iva: 0 }
+        };
+        saveReceptionToJSONBin(payload).then(() => {
+          const msg = document.getElementById('successMessage');
+          msg.textContent = 'Recepción limpiada y guardada. Lista para empezar una nueva.';
+          msg.style.display = 'block';
+          setTimeout(() => msg.style.display = 'none', 4000);
+          Swal.fire('Listo', 'Se limpió y guardó el estado vacío.', 'success');
+        }).catch(e => Swal.fire('Error', String(e), 'error'));
+      }
+    });
   });
 
+  // ---- helpers locales ----
   function parseNum(v){ const n=parseFloat(v); return isNaN(n)?0:n; }
 });
