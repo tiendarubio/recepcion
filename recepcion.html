@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Recepción — Avenida Morazán</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="assets/css/styles.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>.table thead th{white-space:nowrap}.totales-box{font-weight:600}</style>
+</head>
+<body>
+  <div class="container mt-5">
+    <img src="assets/img/trlogo.png" alt="Logo" class="logo">
+    <h1 id="storeTitle" class="text-center">AVENIDA MORAZÁN — Recepción</h1>
+    <h3 id="fechaRecepcion" class="text-center" style="margin-top:10px;"></h3>
+    <p id="successMessage" class="text-success text-center mt-2" style="display:none;"></p>
+
+    <div class="section-container">
+      <div class="btn-group-custom">
+        <button id="saveReception" class="btn btn-primary btn-custom">
+          <i class="fas fa-save"></i><br>Guardar
+        </button>
+        <button id="exportPDF" class="btn btn-success btn-custom" disabled>
+          <i class="fas fa-file-pdf"></i><br>PDF
+        </button>
+        <button id="printPDF" class="btn btn-info btn-custom" disabled>
+          <i class="fas fa-print"></i><br>Imprimir
+        </button>
+        <button id="exportExcel" class="btn btn-success btn-custom" disabled>
+          <i class="fas fa-file-excel"></i><br>Excel
+        </button>
+        <button id="clearReception" class="btn btn-danger btn-custom" disabled>
+          <i class="fas fa-trash-alt"></i><br>Limpiar
+        </button>
+      </div>
+    </div>
+
+    <div class="section-container">
+      <div class="row g-3">
+        <div class="col-sm-6">
+          <label class="form-label">Proveedor</label>
+          <input id="proveedorInput" type="text" class="form-control" placeholder="Ingrese proveedor...">
+        </div>
+        <div class="col-sm-6 position-relative">
+          <label class="form-label">Buscar producto (catálogo)</label>
+          <input id="searchInput" type="text" class="form-control" placeholder="Nombre o código de barras">
+          <ul id="suggestions" class="list-group position-absolute w-100" style="z-index:1000;"></ul>
+        </div>
+      </div>
+
+      <hr class="my-4">
+
+      <h5 class="mb-3">Agregar producto manual</h5>
+      <div class="manual-grid">
+        <input id="mCodigo" type="text" class="form-control" placeholder="CÓDIGO DE BARRA">
+        <input id="mNombre" type="text" class="form-control" placeholder="NOMBRE DEL PRODUCTO">
+        <input id="mCodInv" type="text" class="form-control" placeholder="CODIGO DE INVENTARIO" value="N/A">
+        <input id="mCantidad" type="number" class="form-control" placeholder="CANTIDAD" min="0" step="1">
+        <input id="mTotalSin" type="number" class="form-control" placeholder="COSTO TOTAL SIN IVA" min="0" step="0.01">
+      </div>
+      <div class="mt-2">
+        <button id="btnAddManual" class="btn btn-outline-primary btn-sm">
+          <i class="fas fa-plus"></i> Agregar manual
+        </button>
+      </div>
+    </div>
+
+    <div class="section-container">
+      <h2 class="section-title">Detalle de Recepción</h2>
+      <div class="table-responsive">
+        <table class="table table-bordered" id="recepcionTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Código de Barras</th>
+              <th>Nombre del Producto</th>
+              <th>Código Inventario</th>
+              <th>Cantidad</th>
+              <th>Costo Total sin IVA</th>
+              <th>Unit. con IVA</th>
+              <th>Unit. sin IVA</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="recepcionBody"></tbody>
+        </table>
+      </div>
+
+      <div class="row mt-3">
+        <div class="col-md-4 totales-box">Líneas: <span id="tLineas">0</span></div>
+        <div class="col-md-4 totales-box">Cantidad total: <span id="tCantidad">0</span></div>
+        <div class="col-md-4 totales-box">Total sin IVA: $<span id="tSinIva">0.00</span> — Total con IVA: $<span id="tConIva">0.00</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
+  <script src="assets/js/app.js"></script>
+  <script src="assets/js/recepcion.js"></script>
+</body>
+</html>
