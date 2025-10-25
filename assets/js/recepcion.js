@@ -1,4 +1,3 @@
-// recepcion.js — Av. Morazán (scanner-friendly + carga JSONBin + Enter flow + limpiar guarda)
 document.addEventListener('DOMContentLoaded', async () => {
   const IVA = 0.13;
   const $ = (id) => document.getElementById(id);
@@ -7,13 +6,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const body = $('recepcionBody');
   const proveedorInput = $('proveedorInput');
+  const numCreditoInput = $('numCreditoInput');
   const btnSave = $('saveReception');
   const btnPDF = $('exportPDF');
   const btnPrint = $('printPDF');
   const btnExcel = $('exportExcel');
   const btnClear = $('clearReception');
 
-  // ------- Alta manual -------
+  // Alta manual
   const mCodigo = $('mCodigo');
   const mNombre = $('mNombre');
   const mCodInv = $('mCodInv');
@@ -36,12 +36,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     mCodigo.focus();
   });
 
-  // ------- Autocomplete y pistola lectora -------
+  // Autocomplete y pistola
   const searchInput = $('searchInput');
   const suggestions = $('suggestions');
   let currentFocus = -1;
 
-  await preloadCatalog(); // del app.js
+  await preloadCatalog();
 
   searchInput.addEventListener('input', () => {
     const q = (searchInput.value || '').replace(/\r|\n/g,'').trim().toLowerCase();
@@ -51,9 +51,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     loadProductsFromGoogleSheets().then(rows => {
       const filtered = rows.filter(r => {
-        const nombre = (r[0] || '').toLowerCase();
-        const barcode = (r[3] || '').toLowerCase();
-        return nombre.includes(q) || barcode.includes(q);
+        const nombre    = (r[0] || '').toLowerCase();
+        const codInvent = (r[1] || '').toLowerCase();
+        const barcode   = (r[3] || '').toLowerCase();
+        return nombre.includes(q) || barcode.includes(q) || codInvent.includes(q);
       }).slice(0, 50);
 
       filtered.forEach(prod => {
@@ -62,7 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const nombre = prod[0] || '';
         const codInvent = prod[1] || 'N/A';
         const barcode = prod[3] || 'sin código';
-        li.textContent = `${nombre} (${barcode})`;
+        li.textContent = `${nombre} (${barcode}) [${codInvent}]`;
         li.addEventListener('click', () => addRowAndFocus({ barcode, nombre, codInvent }));
         suggestions.appendChild(li);
       });
@@ -83,7 +84,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const rows = (window.CATALOGO_CACHE || []);
         let match = null;
         for (const r of rows) {
-          if (r[3] && String(r[3]).trim() === q) { match = r; break; }
+          const barcode   = r[3] ? String(r[3]).trim() : '';
+          const codInvent = r[1] ? String(r[1]).trim() : '';
+          if (barcode === q || codInvent === q) { match = r; break; }
         }
         if (match) {
           const nombre = match[0] || '';
@@ -113,7 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // ------- Agregar fila (CANTIDAD inicia vacía) -------
+  // Agregar fila (cantidad vacía)
   function addRow({ barcode, nombre, codInvent, cantidad='', totalSin=0 }) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -138,7 +141,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     [qty, totalSinInp].forEach(inp => inp.addEventListener('input', () => recalcRow(tr)));
 
-    // Enter-flow: Cantidad -> TotalSin -> Search
     qty.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); totalSinInp.focus(); } });
     totalSinInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); searchInput.focus(); } });
 
@@ -158,7 +160,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   function parseNum(v){ const n = parseFloat(v); return isNaN(n) ? 0 : n; }
   function fix2(n){ return Math.round(n*100)/100; }
 
-  // Unidad sin IVA = TotalSin / Cantidad ; Unidad con IVA = Unidad sin IVA * 1.13
   function recalcRow(tr) {
     const qtyVal = parseNum(tr.querySelector('.qty').value);
     const totalSinVal = parseNum(tr.querySelector('.totalSin').value);
@@ -167,7 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (qtyVal > 0) {
       const unitSin = totalSinVal / qtyVal;
-      const unitCon = unitSin * (1 + IVA);
+      const unitCon = unitSin * (1 + 0.13);
       unitSinInp.value = unitSin ? fix2(unitSin).toFixed(2) : '';
       unitConInp.value = unitCon ? fix2(unitCon).toFixed(2) : '';
     } else {
@@ -184,7 +185,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const tSin = parseNum(tr.querySelector('.totalSin')?.value);
       if (qty > 0) { lineas++; tCantidad += qty; totalSin += fix2(tSin); }
     });
-    totalCon = fix2(totalSin * (1 + IVA));
+    totalCon = fix2(totalSin * (1 + 0.13));
     $('tLineas').textContent = lineas;
     $('tCantidad').textContent = tCantidad;
     $('tSinIva').textContent = fix2(totalSin).toFixed(2);
@@ -193,17 +194,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateButtons();
   }
 
+  function sanitizeName(s){
+    return (s||'').toString().trim().replace(/\s+/g,'_').replace(/[^\w\-\.]/g,'_');
+  }
+
   function updateButtons(){
     const has = body.rows.length > 0;
     btnPDF.disabled = !has;
     btnPrint.disabled = !has;
     btnExcel.disabled = !has;
-    btnClear.disabled = !has && !proveedorInput.value.trim();
+    btnClear.disabled = !has && !(proveedorInput.value.trim() || numCreditoInput.value.trim());
   }
 
-  // ------- Guardar -------
+  // Guardar
   btnSave.addEventListener('click', () => {
     if (!proveedorInput.value.trim()) { Swal.fire('Proveedor requerido', 'Ingrese el nombre del proveedor.', 'info'); return; }
+    if (!numCreditoInput.value.trim()) { Swal.fire('Crédito Fiscal requerido', 'Ingrese el número de crédito fiscal.', 'info'); return; }
     if (body.rows.length === 0) { Swal.fire('Sin ítems', 'Agregue al menos un producto.', 'error'); return; }
 
     const items = [...body.getElementsByTagName('tr')].map(tr => {
@@ -219,12 +225,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         unit_con_iva: fix2(unitCon),
         unit_sin_iva: fix2(unitSin),
         total_sin_iva: fix2(totalSin),
-        total_con_iva: fix2(totalSin * (1 + IVA))
+        total_con_iva: fix2(totalSin * (1 + 0.13))
       };
     });
 
     const payload = {
-      meta: { tienda: 'AVENIDA MORAZÁN', proveedor: proveedorInput.value.trim(), fechaRecepcion: new Date().toISOString() },
+      meta: {
+        tienda: 'AVENIDA MORAZÁN',
+        proveedor: proveedorInput.value.trim(),
+        numero_credito_fiscal: numCreditoInput.value.trim(),
+        fechaRecepcion: new Date().toISOString()
+      },
       items,
       totales: {
         lineas: Number(document.getElementById('tLineas').textContent),
@@ -243,17 +254,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }).catch(e => Swal.fire('Error', String(e), 'error'));
   });
 
-  // ------- Cargar estado previo desde JSONBin -------
+  // Cargar estado previo
   try {
     const record = await loadReceptionFromJSONBin();
     if (record && record.items && Array.isArray(record.items)) {
       if (record.meta && record.meta.proveedor) { proveedorInput.value = record.meta.proveedor; }
+      if (record.meta && record.meta.numero_credito_fiscal) { numCreditoInput.value = record.meta.numero_credito_fiscal; }
       record.items.forEach(it => {
         addRow({
           barcode: it.codigo_barras || '',
           nombre: it.nombre || '',
           codInvent: it.codigo_inventario || 'N/A',
-          cantidad: Number(it.cantidad) || 0,
+          cantidad: (it.cantidad !== undefined && it.cantidad !== null) ? Number(it.cantidad) : '',
           totalSin: Number(it.total_sin_iva) || 0
         });
       });
@@ -261,10 +273,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   } catch (e) { console.error('Error al cargar estado previo:', e); }
 
-  // ------- PDF / Imprimir -------
+  // PDF/Imprimir
   btnPDF.addEventListener('click', () => exportPDF(false));
   btnPrint.addEventListener('click', () => exportPDF(true));
-
   function exportPDF(openWindow=false){
     if(body.rows.length===0) return;
     const { jsPDF } = window.jspdf;
@@ -273,7 +284,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     doc.setFontSize(12);
     doc.text('Tienda: AVENIDA MORAZÁN',10,10);
     doc.text(`Proveedor: ${proveedorInput.value || '-'}`,10,18);
-    doc.text(`Fecha: ${fecha}`,10,26);
+    doc.text(`Crédito Fiscal: ${numCreditoInput.value || '-'}`,10,26);
+    doc.text(`Fecha: ${fecha}`,10,34);
     const rows = [...body.getElementsByTagName('tr')].map((tr,i)=>([
       i+1,
       tr.cells[1].innerText,
@@ -283,16 +295,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       (parseNum(tr.querySelector('.unitSin').value)).toFixed(2),
       (parseNum(tr.querySelector('.unitCon').value)).toFixed(2),
       (parseNum(tr.querySelector('.totalSin').value)).toFixed(2),
-      (parseNum(tr.querySelector('.totalSin').value)*(1+IVA)).toFixed(2)
+      (parseNum(tr.querySelector('.totalSin').value)*(1+0.13)).toFixed(2)
     ]));
-    doc.autoTable({startY:36, head:[['#','Código Barras','Producto','Cod. Inv.','Cant.','Unit. sin IVA','Unit. con IVA','Total sin IVA','Total con IVA']], body:rows, styles:{fontSize:9,cellPadding:2}});
+    doc.autoTable({startY:40, head:[['#','Código Barras','Producto','Cod. Inv.','Cant.','Unit. sin IVA','Unit. con IVA','Total sin IVA','Total con IVA']], body:rows, styles:{fontSize:9,cellPadding:2}});
     const y = doc.lastAutoTable.finalY + 6;
     doc.text(`Líneas: ${$('tLineas').textContent}  |  Cantidad total: ${$('tCantidad').textContent}  |  Total sin IVA: $${$('tSinIva').textContent}  |  Total con IVA: $${$('tConIva').textContent}`,10,y);
-    const name = `Recepcion_Avenida_Morazan_${fecha}.pdf`;
+    const name = `${sanitizeName(proveedorInput.value)}_${sanitizeName(numCreditoInput.value)}_${fecha}_RECEPCION_AVM.pdf`;
     if(openWindow) doc.output('dataurlnewwindow'); else doc.save(name);
   }
 
-  // ------- Excel: codigo (Cod. Inventario), unidad=6, cantidad, totalcosto = COSTO TOTAL SIN IVA -------
+  // Excel export
   btnExcel.addEventListener('click', () => {
     if(body.rows.length===0) return;
     const fecha = new Date().toISOString().split('T')[0];
@@ -300,7 +312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     [...body.getElementsByTagName('tr')].forEach(tr => {
       const codInvent = String(tr.cells[3].innerText || '');
       const qty = parseNum(tr.querySelector('.qty').value);
-      const totalSin = parseNum(tr.querySelector('.totalSin').value); // COSTO TOTAL SIN IVA
+      const totalSin = parseNum(tr.querySelector('.totalSin').value);
       data.push([codInvent, 6, Number(qty), Number(fix2(totalSin))]);
     });
     const wb = XLSX.utils.book_new();
@@ -310,13 +322,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const blob = new Blob([wbout], { type:'application/octet-stream' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `Recepcion_Avenida_Morazan_${fecha}.xlsx`;
+    a.download = `${sanitizeName(proveedorInput.value)}_${sanitizeName(numCreditoInput.value)}_${fecha}_RECEPCION_AVM.xlsx`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   });
 
-  // ------- Limpiar (borra, resetea y GUARDA estado vacío) -------
+  // Limpiar y guardar vacío
   btnClear.addEventListener('click', () => {
-    if (body.rows.length === 0 && !proveedorInput.value.trim()) return;
+    if (body.rows.length === 0 && !(proveedorInput.value.trim() || numCreditoInput.value.trim())) return;
     Swal.fire({
       title:'¿Vaciar y comenzar nueva recepción?',
       text:'Esto guardará el estado vacío.',
@@ -327,10 +339,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       if(res.isConfirmed){
         body.innerHTML='';
         proveedorInput.value='';
+        numCreditoInput.value='';
         recalcTotals();
         updateButtons();
         const payload = {
-          meta: { tienda: 'AVENIDA MORAZÁN', proveedor: '', fechaRecepcion: new Date().toISOString() },
+          meta: { tienda: 'AVENIDA MORAZÁN', proveedor: '', numero_credito_fiscal: '', fechaRecepcion: new Date().toISOString() },
           items: [],
           totales: { lineas: 0, cantidad_total: 0, total_sin_iva: 0, total_con_iva: 0 }
         };
@@ -345,6 +358,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // ---- helpers locales ----
-  function parseNum(v){ const n=parseFloat(v); return isNaN(n)?0:n; }
+  function parseNum(v){ const n = parseFloat(v); return isNaN(n)?0:n; }
+  function fix2(n){ return Math.round(n*100)/100; }
 });

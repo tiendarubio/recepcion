@@ -39,13 +39,17 @@
 
     <div class="section-container">
       <div class="row g-3">
-        <div class="col-sm-6">
+        <div class="col-sm-4">
           <label class="form-label">Proveedor</label>
           <input id="proveedorInput" type="text" class="form-control" placeholder="Ingrese proveedor...">
         </div>
-        <div class="col-sm-6 position-relative">
+        <div class="col-sm-4">
+          <label class="form-label">Número de Crédito Fiscal</label>
+          <input id="numCreditoInput" type="text" class="form-control" placeholder="Ej. 001-123456-789-0">
+        </div>
+        <div class="col-sm-4 position-relative">
           <label class="form-label">Buscar producto (catálogo)</label>
-          <input id="searchInput" type="text" class="form-control" placeholder="Nombre o código de barras">
+          <input id="searchInput" type="text" class="form-control" placeholder="Nombre, código inventario o código de barras">
           <ul id="suggestions" class="list-group position-absolute w-100" style="z-index:1000;"></ul>
         </div>
       </div>
