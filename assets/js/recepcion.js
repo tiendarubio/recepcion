@@ -20,6 +20,55 @@ document.addEventListener('DOMContentLoaded', async () => {
   const mCantidad = $('mCantidad');
   const mTotalSin = $('mTotalSin');
 
+  // --- Estado de recepción actual (R1/R2/R3) ---
+  let CURRENT_RECEPCION = localStorage.getItem('TR_AVM_CURRENT_RECEPCION') || 'R1';
+  const recepcionSelect = $('recepcionSelect');
+  function getCurrentBinId() { return RECEPCION_BINS[CURRENT_RECEPCION]; }
+  function sanitizeName(s){ return (s||'').toString().trim().replace(/\s+/g,'_').replace(/[^\w\-\.]/g,'_'); }
+
+  recepcionSelect.value = CURRENT_RECEPCION;
+
+  // --- Proveedor: autocomplete desde hoja proveedores!C2:C1000 ---
+  const provSuggestions = $('provSuggestions');
+  await preloadProviders();
+
+  let provFocus = -1;
+  proveedorInput.addEventListener('input', () => {
+    const q = (proveedorInput.value || '').trim().toLowerCase();
+    provSuggestions.innerHTML = '';
+    provFocus = -1;
+    if (!q) return;
+    loadProvidersFromGoogleSheets().then(list => {
+      list.filter(p => p.toLowerCase().includes(q)).slice(0,50).forEach(name => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item';
+        li.textContent = name;
+        li.addEventListener('click', () => { proveedorInput.value = name; provSuggestions.innerHTML = ''; });
+        provSuggestions.appendChild(li);
+      });
+    });
+  });
+  proveedorInput.addEventListener('keydown', (e) => {
+    const items = provSuggestions.getElementsByTagName('li');
+    if (e.key === 'ArrowDown') { provFocus++; addActiveProv(items); }
+    else if (e.key === 'ArrowUp') { provFocus--; addActiveProv(items); }
+    else if (e.key === 'Enter') {
+      if (provFocus > -1 && items[provFocus]) {
+        e.preventDefault();
+        items[provFocus].click();
+      }
+    }
+  });
+  function addActiveProv(items){
+    if(!items || !items.length) return;
+    [...items].forEach(x => x.classList.remove('active'));
+    if (provFocus >= items.length) provFocus = 0;
+    if (provFocus < 0) provFocus = items.length - 1;
+    items[provFocus].classList.add('active');
+    items[provFocus].scrollIntoView({ block:'nearest' });
+  }
+
+  // Alta manual de producto
   $('btnAddManual').addEventListener('click', () => {
     const codigo = (mCodigo.value || '').trim();
     const nombre = (mNombre.value || '').trim();
@@ -27,16 +76,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const qty = parseNum(mCantidad.value);
     const tSin = parseNum(mTotalSin.value);
 
-    if (!codigo || !nombre) { Swal.fire('Campos faltantes', 'Ingrese CÓDIGO DE BARRA y NOMBRE.', 'info'); return; }
-    if (!(qty > 0)) { Swal.fire('Cantidad inválida', 'La CANTIDAD debe ser mayor que 0.', 'warning'); return; }
-    if (!(tSin >= 0)) { Swal.fire('Costo inválido', 'El COSTO TOTAL SIN IVA debe ser 0 o mayor.', 'warning'); return; }
+    if (!codigo || !nombre) { Swal.fire('Campos faltantes', 'Ingrese código de barra y nombre.', 'info'); return; }
+    if (!(qty > 0)) { Swal.fire('Cantidad inválida', 'La cantidad debe ser mayor que 0.', 'warning'); return; }
+    if (!(tSin >= 0)) { Swal.fire('Costo inválido', 'El costo total sin IVA debe ser 0 o mayor.', 'warning'); return; }
 
     addRow({ barcode: codigo, nombre, codInvent: codInv, cantidad: qty, totalSin: tSin });
     mCodigo.value = ''; mNombre.value = ''; mCodInv.value = 'N/A'; mCantidad.value = ''; mTotalSin.value = '';
     mCodigo.focus();
   });
 
-  // Autocomplete y pistola
+  // Autocomplete productos (con pistola)
   const searchInput = $('searchInput');
   const suggestions = $('suggestions');
   let currentFocus = -1;
@@ -162,7 +211,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function recalcRow(tr) {
     const qtyVal = parseNum(tr.querySelector('.qty').value);
-    const totalSinVal = parseNum(tr.querySelector('.totalSin').value);
+       const totalSinVal = parseNum(tr.querySelector('.totalSin').value);
     const unitSinInp = tr.querySelector('.unitSin');
     const unitConInp = tr.querySelector('.unitCon');
 
@@ -194,10 +243,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateButtons();
   }
 
-  function sanitizeName(s){
-    return (s||'').toString().trim().replace(/\s+/g,'_').replace(/[^\w\-\.]/g,'_');
-  }
-
   function updateButtons(){
     const has = body.rows.length > 0;
     btnPDF.disabled = !has;
@@ -208,7 +253,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Guardar
   btnSave.addEventListener('click', () => {
-    if (!proveedorInput.value.trim()) { Swal.fire('Proveedor requerido', 'Ingrese el nombre del proveedor.', 'info'); return; }
+    if (!proveedorInput.value.trim()) { Swal.fire('Proveedor requerido', 'Ingrese o seleccione un proveedor.', 'info'); return; }
     if (!numCreditoInput.value.trim()) { Swal.fire('Crédito Fiscal requerido', 'Ingrese el número de crédito fiscal.', 'info'); return; }
     if (body.rows.length === 0) { Swal.fire('Sin ítems', 'Agregue al menos un producto.', 'error'); return; }
 
@@ -245,7 +290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     };
 
-    saveReceptionToJSONBin(payload).then(() => {
+    saveReceptionToJSONBin(getCurrentBinId(), payload).then(() => {
       const msg = document.getElementById('successMessage');
       msg.textContent = 'Recepción guardada correctamente.';
       msg.style.display = 'block';
@@ -254,24 +299,54 @@ document.addEventListener('DOMContentLoaded', async () => {
     }).catch(e => Swal.fire('Error', String(e), 'error'));
   });
 
-  // Cargar estado previo
-  try {
-    const record = await loadReceptionFromJSONBin();
-    if (record && record.items && Array.isArray(record.items)) {
-      if (record.meta && record.meta.proveedor) { proveedorInput.value = record.meta.proveedor; }
-      if (record.meta && record.meta.numero_credito_fiscal) { numCreditoInput.value = record.meta.numero_credito_fiscal; }
-      record.items.forEach(it => {
-        addRow({
-          barcode: it.codigo_barras || '',
-          nombre: it.nombre || '',
-          codInvent: it.codigo_inventario || 'N/A',
-          cantidad: (it.cantidad !== undefined && it.cantidad !== null) ? Number(it.cantidad) : '',
-          totalSin: Number(it.total_sin_iva) || 0
+  // Cargar estado previo del BIN actual
+  await (async function loadAndRenderFromCurrentBin(){
+    try {
+      const record = await loadReceptionFromJSONBin(getCurrentBinId());
+      if (record && record.items && Array.isArray(record.items)) {
+        if (record.meta && record.meta.proveedor) { proveedorInput.value = record.meta.proveedor; }
+        if (record.meta && record.meta.numero_credito_fiscal) { numCreditoInput.value = record.meta.numero_credito_fiscal; }
+        record.items.forEach(it => {
+          addRow({
+            barcode: it.codigo_barras || '',
+            nombre: it.nombre || '',
+            codInvent: it.codigo_inventario || 'N/A',
+            cantidad: (it.cantidad !== undefined && it.cantidad !== null) ? Number(it.cantidad) : '',
+            totalSin: Number(it.total_sin_iva) || 0
+          });
         });
-      });
-      recalcTotals();
-    }
-  } catch (e) { console.error('Error al cargar estado previo:', e); }
+        recalcTotals();
+      }
+    } catch (e) { console.error('Error al cargar estado previo:', e); }
+  })();
+
+  // Cambio de recepción
+  recepcionSelect.addEventListener('change', async () => {
+    CURRENT_RECEPCION = recepcionSelect.value;
+    localStorage.setItem('TR_AVM_CURRENT_RECEPCION', CURRENT_RECEPCION);
+    body.innerHTML = '';
+    proveedorInput.value = '';
+    numCreditoInput.value = '';
+    recalcTotals();
+    updateButtons();
+    try {
+      const record = await loadReceptionFromJSONBin(getCurrentBinId());
+      if (record && record.items && Array.isArray(record.items)) {
+        if (record.meta && record.meta.proveedor) { proveedorInput.value = record.meta.proveedor; }
+        if (record.meta && record.meta.numero_credito_fiscal) { numCreditoInput.value = record.meta.numero_credito_fiscal; }
+        record.items.forEach(it => {
+          addRow({
+            barcode: it.codigo_barras || '',
+            nombre: it.nombre || '',
+            codInvent: it.codigo_inventario || 'N/A',
+            cantidad: (it.cantidad !== undefined && it.cantidad !== null) ? Number(it.cantidad) : '',
+            totalSin: Number(it.total_sin_iva) || 0
+          });
+        });
+        recalcTotals();
+      }
+    } catch (e) { console.error('Error al cargar estado previo:', e); }
+  });
 
   // PDF/Imprimir
   btnPDF.addEventListener('click', () => exportPDF(false));
@@ -297,7 +372,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       (parseNum(tr.querySelector('.totalSin').value)).toFixed(2),
       (parseNum(tr.querySelector('.totalSin').value)*(1+0.13)).toFixed(2)
     ]));
-    doc.autoTable({startY:40, head:[['#','Código Barras','Producto','Cod. Inv.','Cant.','Unit. sin IVA','Unit. con IVA','Total sin IVA','Total con IVA']], body:rows, styles:{fontSize:9,cellPadding:2}});
+    doc.autoTable({startY:40, head:[['#','Código Barras','Producto','Cod. Inv.','Cant.','Ud. sin IVA','Ud. con IVA','Total sin IVA','Total con IVA']], body:rows, styles:{fontSize:9,cellPadding:2}});
     const y = doc.lastAutoTable.finalY + 6;
     doc.text(`Líneas: ${$('tLineas').textContent}  |  Cantidad total: ${$('tCantidad').textContent}  |  Total sin IVA: $${$('tSinIva').textContent}  |  Total con IVA: $${$('tConIva').textContent}`,10,y);
     const name = `${sanitizeName(proveedorInput.value)}_${sanitizeName(numCreditoInput.value)}_${fecha}_RECEPCION_AVM.pdf`;
@@ -331,15 +406,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (body.rows.length === 0 && !(proveedorInput.value.trim() || numCreditoInput.value.trim())) return;
     Swal.fire({
       title:'¿Vaciar y comenzar nueva recepción?',
-      text:'Esto guardará el estado vacío.',
+      text:'Esto guardará el estado vacío en esta recepción.',
       icon:'warning',
       showCancelButton:true,
       confirmButtonText:'Sí, limpiar y guardar'
     }).then(res => {
       if(res.isConfirmed){
         body.innerHTML='';
-        proveedorInput.value='';
-        numCreditoInput.value='';
+        proveedorInput.value = '';
+        numCreditoInput.value = '';
         recalcTotals();
         updateButtons();
         const payload = {
@@ -347,7 +422,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           items: [],
           totales: { lineas: 0, cantidad_total: 0, total_sin_iva: 0, total_con_iva: 0 }
         };
-        saveReceptionToJSONBin(payload).then(() => {
+        saveReceptionToJSONBin(getCurrentBinId(), payload).then(() => {
           const msg = document.getElementById('successMessage');
           msg.textContent = 'Recepción limpiada y guardada. Lista para empezar una nueva.';
           msg.style.display = 'block';

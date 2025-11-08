@@ -14,6 +14,19 @@
   <div class="container mt-5">
     <img src="assets/img/trlogo.png" alt="Logo" class="logo">
     <h1 id="storeTitle" class="text-center">AVENIDA MORAZÁN — Recepción</h1>
+
+    <!-- Selector de Recepción (sin mostrar BIN) -->
+    <div class="d-flex justify-content-center mb-3">
+      <div class="input-group" style="max-width: 420px;">
+        <span class="input-group-text"><i class="fa-solid fa-inbox"></i></span>
+        <select id="recepcionSelect" class="form-select">
+          <option value="R1">Recepción 1</option>
+          <option value="R2">Recepción 2</option>
+          <option value="R3">Recepción 3</option>
+        </select>
+      </div>
+    </div>
+
     <h3 id="fechaRecepcion" class="text-center" style="margin-top:10px;"></h3>
     <p id="successMessage" class="text-success text-center mt-2" style="display:none;"></p>
 
@@ -39,9 +52,10 @@
 
     <div class="section-container">
       <div class="row g-3">
-        <div class="col-sm-4">
+        <div class="col-sm-4 position-relative">
           <label class="form-label">Proveedor</label>
-          <input id="proveedorInput" type="text" class="form-control" placeholder="Ingrese proveedor...">
+          <input id="proveedorInput" type="text" class="form-control" placeholder="Escriba para buscar proveedor...">
+          <ul id="provSuggestions" class="list-group position-absolute w-100" style="z-index:1000;"></ul>
         </div>
         <div class="col-sm-4">
           <label class="form-label">Número de Crédito Fiscal</label>
@@ -58,11 +72,11 @@
 
       <h5 class="mb-3">Agregar producto manual</h5>
       <div class="manual-grid">
-        <input id="mCodigo" type="text" class="form-control" placeholder="CÓDIGO DE BARRA">
-        <input id="mNombre" type="text" class="form-control" placeholder="NOMBRE DEL PRODUCTO">
-        <input id="mCodInv" type="text" class="form-control" placeholder="CODIGO DE INVENTARIO" value="N/A">
-        <input id="mCantidad" type="number" class="form-control" placeholder="CANTIDAD" min="0" step="1">
-        <input id="mTotalSin" type="number" class="form-control" placeholder="COSTO TOTAL SIN IVA" min="0" step="0.01">
+        <input id="mCodigo" type="text" class="form-control" placeholder="Código de barra">
+        <input id="mNombre" type="text" class="form-control" placeholder="Nombre del producto">
+        <input id="mCodInv" type="text" class="form-control" placeholder="Código de inventario" value="N/A">
+        <input id="mCantidad" type="number" class="form-control" placeholder="Cantidad" min="0" step="1">
+        <input id="mTotalSin" type="number" class="form-control" placeholder="Costo total sin IVA" min="0" step="0.01">
       </div>
       <div class="mt-2">
         <button id="btnAddManual" class="btn btn-outline-primary btn-sm">
@@ -83,8 +97,8 @@
               <th>Código Inventario</th>
               <th>Cantidad</th>
               <th>Costo Total sin IVA</th>
-              <th>Unit. con IVA</th>
-              <th>Unit. sin IVA</th>
+              <th>Ud. con IVA</th>
+              <th>Ud. sin IVA</th>
               <th>Acciones</th>
             </tr>
           </thead>
