@@ -1,22 +1,51 @@
-/* UI base */
-#suggestions{max-width:100%;max-height:300px;overflow-y:auto;left:0;right:0}
-#provSuggestions{max-width:100%;max-height:250px;overflow-y:auto;left:0;right:0}
+/* Estilo base alineado con TRLista */
+:root{
+  --ring:#e9ecef; --card:#ffffff; --muted:#6c757d;
+  --brand:#0d6efd; --ok:#198754; --warn:#ffc107; --danger:#dc3545;
+}
+body{font-family:'Calibri',Arial,sans-serif;background:#f7f7f8}
+.logo{max-width:150px;margin:20px auto;display:block}
+.section-container{padding:20px;border:1.5px solid var(--ring);border-radius:14px;margin-bottom:20px;background-color:var(--card)}
+.section-title{margin-bottom:20px;font-weight:bold}
+
+/* Tabla */
 .table-responsive{display:block;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .table-responsive>.table{width:100%;margin-bottom:0;overflow-y:hidden;-ms-overflow-style:-ms-autohiding-scrollbar}
+
+/* Botones principales */
 .btn-custom{padding:10px;font-size:14px;border-radius:8px}
-.logo{max-width:150px;margin:20px auto;display:block}
-.section-container{padding:20px;border:1px solid #dee2e6;border-radius:10px;margin-bottom:20px;background-color:#f8f9fa}
-.section-title{margin-bottom:20px;font-weight:bold}
 .btn-group-custom{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
 .btn-group-custom .btn{flex:1 1 calc(20% - 10px);min-width:100px}
 @media (max-width:576px){.btn-group-custom .btn{flex:1 1 48%;margin-bottom:10px}}
-body{font-family:'Calibri',Arial,sans-serif}
+
 #storeTitle{font-size:1.8rem;text-align:center;font-weight:bold;margin-bottom:10px}
 #fechaRecepcion{font-size:1.2rem;text-align:center;color:#555;margin-top:5px}
 #storeTitle,#fechaRecepcion{padding:5px;background-color:#f8f9fa;border-radius:5px}
+
+/* Sugerencias (productos y proveedores) al estilo TRLista */
+#suggestions,
+#provSuggestions{
+  max-width:100%;
+  max-height:300px;
+  overflow-y:auto;
+  left:0;
+  right:0;
+  margin-top:.25rem;
+}
+
 #suggestions .list-group-item,
-#provSuggestions .list-group-item{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+#provSuggestions .list-group-item{
+  white-space:normal;
+  line-height:1.4;
+  padding:.35rem .75rem;
+}
+
 #suggestions .list-group-item.active,
-#provSuggestions .list-group-item.active{font-weight:600}
-.manual-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-@media(max-width:768px){.manual-grid{grid-template-columns:1fr 1fr}}
+#provSuggestions .list-group-item.active{
+  font-weight:600;
+}
+
+/* Modal */
+.modal-content{
+  border-radius:12px;
+}

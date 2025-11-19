@@ -13,12 +13,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnExcel = $('exportExcel');
   const btnClear = $('clearReception');
 
-  // Alta manual
+  // Alta manual (en modal)
   const mCodigo = $('mCodigo');
   const mNombre = $('mNombre');
   const mCodInv = $('mCodInv');
   const mCantidad = $('mCantidad');
   const mTotalSin = $('mTotalSin');
+  const manualModalEl = document.getElementById('manualModal');
+  const manualModal = new bootstrap.Modal(manualModalEl);
+
+  // Navegación con Enter dentro del modal (mCodigo -> mNombre -> mCodInv -> mCantidad -> mTotalSin -> Guardar)
+  const modalInputs = [mCodigo, mNombre, mCodInv, mCantidad, mTotalSin];
+  modalInputs.forEach((inp, idx) => {
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (idx < modalInputs.length - 1) {
+          modalInputs[idx + 1].focus();
+        } else {
+          // Último campo: disparar el botón de agregar
+          $('btnAddManual').click();
+        }
+      }
+    });
+  });
 
   // --- Estado de recepción actual (R1/R2/R3) ---
   let CURRENT_RECEPCION = localStorage.getItem('TR_AVM_CURRENT_RECEPCION') || 'R1';
@@ -27,6 +45,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   function sanitizeName(s){ return (s||'').toString().trim().replace(/\s+/g,'_').replace(/[^\w\-\.]/g,'_'); }
 
   recepcionSelect.value = CURRENT_RECEPCION;
+
+  // --- Centrar siempre el elemento que tiene el foco (buscador o cantidad / costo) ---
+  const searchInput = $('searchInput');
+  function centerOnElement(el) {
+    if (!el) return;
+    setTimeout(() => {
+      const rect = el.getBoundingClientRect();
+      const absoluteTop = rect.top + window.pageYOffset;
+      const middle = absoluteTop - (window.innerHeight / 2) + rect.height / 2;
+      window.scrollTo({
+        top: middle,
+        behavior: 'smooth'
+      });
+    }, 0);
+  }
+
+  document.addEventListener('focusin', (e) => {
+    const t = e.target;
+    if (t === searchInput || t.classList.contains('qty') || t.classList.contains('totalSin')) {
+      centerOnElement(t);
+    }
+  });
 
   // --- Proveedor: autocomplete desde hoja proveedores!C2:C1000 ---
   const provSuggestions = $('provSuggestions');
@@ -46,6 +86,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         li.addEventListener('click', () => { proveedorInput.value = name; provSuggestions.innerHTML = ''; });
         provSuggestions.appendChild(li);
       });
+      if (!provSuggestions.children.length) {
+        const li = document.createElement('li');
+        li.className = 'list-group-item list-group-item-light no-results';
+        li.textContent = 'Sin resultados. Escriba el nombre completo del proveedor.';
+        provSuggestions.appendChild(li);
+      }
     });
   });
   proveedorInput.addEventListener('keydown', (e) => {
@@ -68,7 +114,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     items[provFocus].scrollIntoView({ block:'nearest' });
   }
 
-  // Alta manual de producto
+  // Cerrar sugerencias de proveedor al hacer click fuera / ESC
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+    if (target === proveedorInput || provSuggestions.contains(target)) return;
+    provSuggestions.innerHTML = '';
+    provFocus = -1;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      provSuggestions.innerHTML = '';
+      provFocus = -1;
+    }
+  });
+
+  // Función para abrir el modal manual desde búsqueda
+  function openManualModalFromSearch(rawQuery){
+    const q = (rawQuery || '').trim();
+    mCodigo.value = '';
+    mNombre.value = '';
+    mCodInv.value = 'N/A';
+    mCantidad.value = '';
+    mTotalSin.value = '';
+    if (q) {
+      if (/^\d+$/.test(q)) mCodigo.value = q;
+      else mNombre.value = q;
+    }
+    manualModal.show();
+    setTimeout(() => {
+      mCodigo.focus();
+    }, 200);
+  }
+
+  // Alta manual de producto (desde modal)
   $('btnAddManual').addEventListener('click', () => {
     const codigo = (mCodigo.value || '').trim();
     const nombre = (mNombre.value || '').trim();
@@ -81,19 +159,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!(tSin >= 0)) { Swal.fire('Costo inválido', 'El costo total sin IVA debe ser 0 o mayor.', 'warning'); return; }
 
     addRow({ barcode: codigo, nombre, codInvent: codInv, cantidad: qty, totalSin: tSin });
-    mCodigo.value = ''; mNombre.value = ''; mCodInv.value = 'N/A'; mCantidad.value = ''; mTotalSin.value = '';
-    mCodigo.focus();
+    manualModal.hide();
+    searchInput.focus();
   });
 
   // Autocomplete productos (con pistola)
-  const searchInput = $('searchInput');
   const suggestions = $('suggestions');
   let currentFocus = -1;
 
   await preloadCatalog();
 
   searchInput.addEventListener('input', () => {
-    const q = (searchInput.value || '').replace(/\r|\n/g,'').trim().toLowerCase();
+    const raw = (searchInput.value || '').replace(/\r|\n/g,'').trim();
+    const q = raw.toLowerCase();
     suggestions.innerHTML = '';
     currentFocus = -1;
     if (!q) return;
@@ -104,9 +182,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         const codInvent = (r[1] || '').toLowerCase();
         const barcode   = (r[3] || '').toLowerCase();
         return nombre.includes(q) || barcode.includes(q) || codInvent.includes(q);
-      }).slice(0, 50);
+      });
 
-      filtered.forEach(prod => {
+      if (!filtered.length) {
+        const li = document.createElement('li');
+        li.className = 'list-group-item list-group-item-light no-results';
+        li.innerHTML = '<strong>Sin resultados</strong>. Haz clic o presiona Enter para agregar producto manual.';
+        li.addEventListener('click', () => {
+          suggestions.innerHTML = '';
+          openManualModalFromSearch(raw);
+        });
+        suggestions.appendChild(li);
+        return;
+      }
+
+      filtered.slice(0, 50).forEach(prod => {
         const li = document.createElement('li');
         li.className = 'list-group-item';
         const nombre = prod[0] || '';
@@ -121,28 +211,44 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   searchInput.addEventListener('keydown', (e) => {
     const items = suggestions.getElementsByTagName('li');
+    const itemsArr = Array.from(items);
+    const onlyNoResults = itemsArr.length === 1 && itemsArr[0].classList.contains('no-results');
+
     if (e.key === 'ArrowDown') { currentFocus++; addActive(items); }
     else if (e.key === 'ArrowUp') { currentFocus--; addActive(items); }
     else if (e.key === 'Enter') {
       e.preventDefault();
       if (currentFocus > -1 && items[currentFocus]) {
         items[currentFocus].click();
+        return;
+      }
+
+      const raw = (searchInput.value || '').replace(/\r|\n/g,'').trim();
+      if (!raw) return;
+
+      // Si sólo hay "sin resultados", abrir modal
+      if (onlyNoResults || !itemsArr.length) {
+        suggestions.innerHTML = '';
+        openManualModalFromSearch(raw);
+        return;
+      }
+
+      // Intentar match exacto (código de barras / inventario) como en TRLista
+      const rows = (window.CATALOGO_CACHE || []);
+      let match = null;
+      for (const r of rows) {
+        const barcode   = r[3] ? String(r[3]).trim() : '';
+        const codInvent = r[1] ? String(r[1]).trim() : '';
+        if (barcode === raw || codInvent === raw) { match = r; break; }
+      }
+      if (match) {
+        const nombre = match[0] || '';
+        const codInvent = match[1] || 'N/A';
+        const barcode = match[3] || raw;
+        addRowAndFocus({ barcode, nombre, codInvent });
       } else {
-        const q = (searchInput.value || '').replace(/\r|\n/g,'').trim();
-        if (!q) return;
-        const rows = (window.CATALOGO_CACHE || []);
-        let match = null;
-        for (const r of rows) {
-          const barcode   = r[3] ? String(r[3]).trim() : '';
-          const codInvent = r[1] ? String(r[1]).trim() : '';
-          if (barcode === q || codInvent === q) { match = r; break; }
-        }
-        if (match) {
-          const nombre = match[0] || '';
-          const codInvent = match[1] || 'N/A';
-          const barcode = match[3] || q;
-          addRowAndFocus({ barcode, nombre, codInvent });
-        }
+        suggestions.innerHTML = '';
+        openManualModalFromSearch(raw);
       }
     }
   });
@@ -155,6 +261,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     items[currentFocus].classList.add('active');
     items[currentFocus].scrollIntoView({ block:'nearest' });
   }
+
+  // Cerrar sugerencias de productos al hacer click fuera / ESC
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+    if (target === searchInput || suggestions.contains(target)) return;
+    suggestions.innerHTML = '';
+    currentFocus = -1;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      suggestions.innerHTML = '';
+      currentFocus = -1;
+    }
+  });
 
   function addRowAndFocus({ barcode, nombre, codInvent }){
     addRow({ barcode, nombre, codInvent });
@@ -211,13 +331,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function recalcRow(tr) {
     const qtyVal = parseNum(tr.querySelector('.qty').value);
-       const totalSinVal = parseNum(tr.querySelector('.totalSin').value);
+    const totalSinVal = parseNum(tr.querySelector('.totalSin').value);
     const unitSinInp = tr.querySelector('.unitSin');
     const unitConInp = tr.querySelector('.unitCon');
 
     if (qtyVal > 0) {
       const unitSin = totalSinVal / qtyVal;
-      const unitCon = unitSin * (1 + 0.13);
+      const unitCon = unitSin * (1 + IVA);
       unitSinInp.value = unitSin ? fix2(unitSin).toFixed(2) : '';
       unitConInp.value = unitCon ? fix2(unitCon).toFixed(2) : '';
     } else {
@@ -234,7 +354,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const tSin = parseNum(tr.querySelector('.totalSin')?.value);
       if (qty > 0) { lineas++; tCantidad += qty; totalSin += fix2(tSin); }
     });
-    totalCon = fix2(totalSin * (1 + 0.13));
+    totalCon = fix2(totalSin * (1 + IVA));
     $('tLineas').textContent = lineas;
     $('tCantidad').textContent = tCantidad;
     $('tSinIva').textContent = fix2(totalSin).toFixed(2);
@@ -270,7 +390,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         unit_con_iva: fix2(unitCon),
         unit_sin_iva: fix2(unitSin),
         total_sin_iva: fix2(totalSin),
-        total_con_iva: fix2(totalSin * (1 + 0.13))
+        total_con_iva: fix2(totalSin * (1 + IVA))
       };
     });
 
@@ -370,7 +490,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       (parseNum(tr.querySelector('.unitSin').value)).toFixed(2),
       (parseNum(tr.querySelector('.unitCon').value)).toFixed(2),
       (parseNum(tr.querySelector('.totalSin').value)).toFixed(2),
-      (parseNum(tr.querySelector('.totalSin').value)*(1+0.13)).toFixed(2)
+      (parseNum(tr.querySelector('.totalSin').value)*(1+IVA)).toFixed(2)
     ]));
     doc.autoTable({startY:40, head:[['#','Código Barras','Producto','Cod. Inv.','Cant.','Ud. sin IVA','Ud. con IVA','Total sin IVA','Total con IVA']], body:rows, styles:{fontSize:9,cellPadding:2}});
     const y = doc.lastAutoTable.finalY + 6;
@@ -433,6 +553,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  function parseNum(v){ const n = parseFloat(v); return isNaN(n)?0:n; }
-  function fix2(n){ return Math.round(n*100)/100; }
+  // Enfocar buscador al inicio
+  searchInput.focus();
 });
