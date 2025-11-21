@@ -63,10 +63,15 @@
         </div>
         <div class="col-sm-4 position-relative">
           <label class="form-label">Buscar producto (catálogo)</label>
-          <input id="searchInput" type="text" class="form-control" placeholder="Nombre, código inventario o código de barras">
+          <div class="input-group">
+            <input id="searchInput" type="text" class="form-control" placeholder="Nombre, código inventario o código de barras">
+            <button id="btnOpenManual" class="btn btn-outline-secondary" type="button" title="Agregar producto manual">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          </div>
           <ul id="suggestions" class="list-group position-absolute w-100" style="z-index:1000;"></ul>
           <div class="form-text small text-muted mt-1">
-            Si no se encuentra en el catálogo, podrás agregarlo manualmente.
+            Si no se encuentra en el catálogo, puedes agregarlo manualmente con el botón <strong>+</strong>.
           </div>
         </div>
       </div>

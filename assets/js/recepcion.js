@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Función para abrir el modal manual desde búsqueda
+  // Función para abrir el modal manual
   function openManualModalFromSearch(rawQuery){
     const q = (rawQuery || '').trim();
     mCodigo.value = '';
@@ -145,6 +145,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       mCodigo.focus();
     }, 200);
   }
+
+  // Botón + para abrir el modal manual sin depender de resultados
+  const btnOpenManual = document.getElementById('btnOpenManual');
+  btnOpenManual.addEventListener('click', () => {
+    const raw = (searchInput.value || '').replace(/\r|\n/g,'').trim();
+    openManualModalFromSearch(raw);
+  });
 
   // Alta manual de producto (desde modal)
   $('btnAddManual').addEventListener('click', () => {
@@ -187,11 +194,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!filtered.length) {
         const li = document.createElement('li');
         li.className = 'list-group-item list-group-item-light no-results';
-        li.innerHTML = '<strong>Sin resultados</strong>. Haz clic o presiona Enter para agregar producto manual.';
-        li.addEventListener('click', () => {
-          suggestions.innerHTML = '';
-          openManualModalFromSearch(raw);
-        });
+        li.innerHTML = '<strong>Sin resultados</strong>. Usa el botón + para agregar producto manual.';
         suggestions.appendChild(li);
         return;
       }
@@ -212,7 +215,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   searchInput.addEventListener('keydown', (e) => {
     const items = suggestions.getElementsByTagName('li');
     const itemsArr = Array.from(items);
-    const onlyNoResults = itemsArr.length === 1 && itemsArr[0].classList.contains('no-results');
 
     if (e.key === 'ArrowDown') { currentFocus++; addActive(items); }
     else if (e.key === 'ArrowUp') { currentFocus--; addActive(items); }
@@ -225,13 +227,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const raw = (searchInput.value || '').replace(/\r|\n/g,'').trim();
       if (!raw) return;
-
-      // Si sólo hay "sin resultados", abrir modal
-      if (onlyNoResults || !itemsArr.length) {
-        suggestions.innerHTML = '';
-        openManualModalFromSearch(raw);
-        return;
-      }
 
       // Intentar match exacto (código de barras / inventario) como en TRLista
       const rows = (window.CATALOGO_CACHE || []);
@@ -246,9 +241,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const codInvent = match[1] || 'N/A';
         const barcode = match[3] || raw;
         addRowAndFocus({ barcode, nombre, codInvent });
-      } else {
-        suggestions.innerHTML = '';
-        openManualModalFromSearch(raw);
       }
     }
   });
